@@ -1,23 +1,57 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Scharff.Application.Commands.DOF.RegisterBillableOrder;
+using Scharff.Domain.Entities;
 using Scharff.Domain.Exceptions;
 using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrder;
 using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrderOperativeDetail;
 using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrderService;
-using System;
-using System.Collections.Generic;
-using System.Threading;
 
-namespace Scharff.Tests
+namespace Scharff.UnitTest.Commands.RegisterBillableOrder
 {
-    [TestClass]
     public class RegisterBillableOrderCommandHandlerTests
     {
-        [TestMethod]
+        [Fact]
         public void Handle_WhenCalledWithValidRequest_ReturnsBillableOrderId()
         {
             // Arrange
+
+            List<BillableOrderService> lstService = new();
+            List<BillableOrderServiceOperativeDetail> lstDetail = new();
+
+            var detail = new BillableOrderServiceOperativeDetail
+            {
+                Id_Service_Billable_Order = 1,
+                Id_Operative_Detail = 50,
+                Description = "PRUEBA DO ID 50",
+                Id_Unit_Measure = 5,
+                Quantity = 5,
+                Discount_Percentage = 1,
+                Discount_Amount = 50,
+                Subtotal_Amount = 50,
+                Igv_Amount = 14,
+                Total_Amount = 64,
+                User = "atornero"
+            };
+
+            var service = new BillableOrderService
+            {
+                Id_Billable_Order = 1,
+                Id_Service = 1,
+                Description = "PRUEBA SERVICIO ID 1",
+                Discount_Amount = 50,
+                Sale_Amount = 2000,
+                Igv_Amount = 360,
+                Total_Amount = 2360,
+                Unit_Amount = 2000,
+                User = "atornero",
+                Billable_Order_Service_Operative_Detail = lstDetail
+
+            };
+
+            // Agrega el nuevo servicio a la lista lstService
+            lstService.Add(service);
+
+
             var registerBillableOrderCommandMock = new Mock<IRegisterBillableOrderCommand>();
             var registerBillableOrderServiceCommandMock = new Mock<IRegisterBillableOrderServiceCommand>();
 
@@ -26,13 +60,23 @@ namespace Scharff.Tests
                 registerBillableOrderServiceCommandMock.Object
             );
 
-            var request = new RegisterBillableOrderCommand
+            var request = new Application.Commands.DOF.RegisterBillableOrder.RegisterBillableOrderCommand
             {
-                // Set up your request properties here
-                Billable_Order_Service = new List<BillableOrderService>
-                {
-                    // Set up your BillableOrderService objects here
-                }
+                Id_Base_Organizational_Structure = 1,
+                Year_Operative_Document = 2023,
+                Order_Number = "ORDNRO1",
+                Reference_Number = "ORD1",
+                Id_Order_Type = "1",
+                Id_Client = 82,
+                Operative_Document_Date = Convert.ToDateTime("2023-10-01"),
+                Id_Currency_Type = 38,
+                Subtotal_Amount = 5000,
+                Tax_Amount = 9000,
+                Discount_Amount = 100,
+                Total_Amount = 5800,
+                Exchange_Type_Value = 3.825M,
+                User = "atornero",
+                Billable_Order_Service = lstService
             };
 
             // Set up the mocks for command responses
@@ -46,13 +90,15 @@ namespace Scharff.Tests
             var result = handler.Handle(request, CancellationToken.None).Result;
 
             // Assert
-            Assert.AreEqual(1, result); // Ensure the returned BillableOrderId matches the expected value
+            Assert.Equal(1, result); // Ensure the returned BillableOrderId matches the expected value
         }
 
-        [TestMethod]
-        public void Handle_WhenNoServicesInRequest_ThrowsServiceException()
+        [Fact]
+        public async void Handle_WhenNoServicesInRequest_ThrowsServiceExceptionAsync()
         {
             // Arrange
+
+
             var registerBillableOrderCommandMock = new Mock<IRegisterBillableOrderCommand>();
             var registerBillableOrderServiceCommandMock = new Mock<IRegisterBillableOrderServiceCommand>();
 
@@ -61,14 +107,33 @@ namespace Scharff.Tests
                 registerBillableOrderServiceCommandMock.Object
             );
 
-            var request = new RegisterBillableOrderCommand
+            List<BillableOrderService> lstService = new();
+
+            var request = new Application.Commands.DOF.RegisterBillableOrder.RegisterBillableOrderCommand
             {
-                // Set up your request properties here
-                Billable_Order_Service = null // No services in the request
+                Id_Base_Organizational_Structure = 1,
+                Year_Operative_Document = 2023,
+                Order_Number = "ORDNRO1",
+                Reference_Number = "ORD1",
+                Id_Order_Type = "1",
+                Id_Client = -1, // Configura un valor inválido
+                Operative_Document_Date = Convert.ToDateTime("2023-10-01"),
+                Id_Currency_Type = 38,
+                Subtotal_Amount = 5000,
+                Tax_Amount = 9000,
+                Discount_Amount = 100,
+                Total_Amount = 5800,
+                Exchange_Type_Value = 3.825M,
+                User = "atornero",
+                Billable_Order_Service = lstService
             };
 
             // Act and Assert
-            Assert.ThrowsException<ServiceException>(() => handler.Handle(request, CancellationToken.None).Result);
+            var exception = await Assert.ThrowsAsync<ServiceException>(() => handler.Handle(request, CancellationToken.None));
+
+
+            Assert.Equal("Ocurrió un error al insertar la Órden Facturable.", exception.Message);
+
         }
     }
 }
