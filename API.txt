@@ -1,0 +1,109 @@
+using Azure.Core;
+using MediatR;
+using Scharff.Domain.Entities;
+using Scharff.Domain.Exceptions;
+using Scharff.Domain.Utils;
+using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrder;
+using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrderOperativeDetail;
+using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrderService;
+using System.ComponentModel.DataAnnotations;
+using System.Transactions;
+using static Scharff.Domain.Utils.Constantes;
+
+namespace Scharff.Application.Commands.DOF.RegisterBillableOrder
+{
+    public class RegisterBillableOrderCommandHandler : IRequestHandler<RegisterBillableOrderCommand, int>
+    {
+        private readonly IRegisterBillableOrderCommand _registerBillableOrder;
+        private readonly IRegisterBillableOrderServiceCommand _registerBillableOrderService;
+
+        public RegisterBillableOrderCommandHandler(IRegisterBillableOrderCommand registerBillableOrder,
+                                                  IRegisterBillableOrderServiceCommand registerBillableOrderService)
+        {
+            _registerBillableOrder = registerBillableOrder;
+            _registerBillableOrderService = registerBillableOrderService;
+        }
+        public async Task<int> Handle(RegisterBillableOrderCommand request, CancellationToken cancellationToken)
+        {
+            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+            try
+            {
+                int billableOrderId = await RegisterBillableOrder(request);
+                if (request?.Billable_Order_Service?.Count > 0)
+                {
+                    foreach (var orderService in request.Billable_Order_Service)
+                    {
+                        await RegisterBillableOrderService(billableOrderId, orderService);
+                    }
+                }
+                else
+                {
+                    throw new ServiceException("No se encontraron servicios en el request 'Billable_Order_Service'.");
+                }
+
+                transactionScope.Complete();
+                return billableOrderId;
+            }
+            catch (Exception ex)
+            {
+                throw new ServiceException(ex.Message);
+            }
+        }
+
+        private async Task<int> RegisterBillableOrder(RegisterBillableOrderCommand request)
+        {
+            var model = new BillableOrderModel
+            {
+                Id_Base_Organizational_Structure = request.Id_Base_Organizational_Structure,
+                Year_Operative_Document = request.Year_Operative_Document,
+                Order_Number = request.Order_Number,
+                Reference_Number = request.Reference_Number,
+                Id_Order_Type = request.Id_Order_Type,
+                Id_Client = request.Id_Client,
+                Operative_Document_Date = request.Operative_Document_Date,
+                Id_Currency_Type = request.Id_Currency_Type,
+                Subtotal_Amount = Math.Round(request.Subtotal_Amount, TamanioDecimal.CABECERA),
+                Tax_Amount = Math.Round(request.Tax_Amount, TamanioDecimal.CABECERA),
+                Discount_Amount = Math.Round(request.Discount_Amount, TamanioDecimal.CABECERA),
+                Total_Amount = Math.Round(request.Total_Amount, TamanioDecimal.CABECERA),
+                Exchange_Type_Value = request.Exchange_Type_Value,
+                creation_author = request.User,
+                Sap_State = Constantes.EstadoEnvioSap.Pendiente
+            };
+
+            int idBillableOrder = await _registerBillableOrder.RegisterBillableOrder(model);
+
+            if (idBillableOrder <= 0)
+            {
+                throw new ValidationException("Ocurrió un error al insertar la Órden Facturable.");
+            }
+
+            return idBillableOrder;
+        }
+
+        private async Task<int> RegisterBillableOrderService(int id_Billable_Order, BillableOrderService orderService)
+        {
+            var model = new BillableOrderServiceModel
+            {
+                Id_Billable_Order = id_Billable_Order,
+                Id_Service = orderService.Id_Service,
+                Description = orderService.Description,
+                Discount_Amount = Math.Round(orderService.Discount_Amount, TamanioDecimal.DETALLE),
+                Sale_Amount = Math.Round(orderService.Sale_Amount, TamanioDecimal.DETALLE),
+                Igv_Amount = Math.Round(orderService.Igv_Amount, TamanioDecimal.DETALLE),
+                Total_Amount = Math.Round(orderService.Total_Amount, TamanioDecimal.DETALLE),
+                Unit_Amount = Math.Round(orderService.Unit_Amount, TamanioDecimal.DETALLE),
+                creation_author = orderService.User
+            };
+
+            int id = await _registerBillableOrderService.RegisterBillableOrderService(model);
+
+            if (id <= 0)
+            {
+                throw new ValidationException("Ocurrió un error al insertar el Servicio de la Órden Facturable.");
+            }
+            return id;
+        }
+
+    }
+}
