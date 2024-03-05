@@ -1,0 +1,74 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using Scharff.Application.Commands.DOF.RegisterBillableOrder;
+using Scharff.Domain.Exceptions;
+using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrder;
+using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrderOperativeDetail;
+using Scharff.Infrastructure.PostgreSQL.Commands.DOF.RegisterDOF.RegisterBillableOrderService;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+
+namespace Scharff.Tests
+{
+    [TestClass]
+    public class RegisterBillableOrderCommandHandlerTests
+    {
+        [TestMethod]
+        public void Handle_WhenCalledWithValidRequest_ReturnsBillableOrderId()
+        {
+            // Arrange
+            var registerBillableOrderCommandMock = new Mock<IRegisterBillableOrderCommand>();
+            var registerBillableOrderServiceCommandMock = new Mock<IRegisterBillableOrderServiceCommand>();
+
+            var handler = new RegisterBillableOrderCommandHandler(
+                registerBillableOrderCommandMock.Object,
+                registerBillableOrderServiceCommandMock.Object
+            );
+
+            var request = new RegisterBillableOrderCommand
+            {
+                // Set up your request properties here
+                Billable_Order_Service = new List<BillableOrderService>
+                {
+                    // Set up your BillableOrderService objects here
+                }
+            };
+
+            // Set up the mocks for command responses
+            registerBillableOrderCommandMock.Setup(command => command.RegisterBillableOrder(It.IsAny<BillableOrderModel>()))
+                .ReturnsAsync(1); // Mock the ID of the registered BillableOrder
+
+            registerBillableOrderServiceCommandMock.Setup(command => command.RegisterBillableOrderService(It.IsAny<BillableOrderServiceModel>()))
+                .ReturnsAsync(2); // Mock the ID of the registered BillableOrderService
+
+            // Act
+            var result = handler.Handle(request, CancellationToken.None).Result;
+
+            // Assert
+            Assert.AreEqual(1, result); // Ensure the returned BillableOrderId matches the expected value
+        }
+
+        [TestMethod]
+        public void Handle_WhenNoServicesInRequest_ThrowsServiceException()
+        {
+            // Arrange
+            var registerBillableOrderCommandMock = new Mock<IRegisterBillableOrderCommand>();
+            var registerBillableOrderServiceCommandMock = new Mock<IRegisterBillableOrderServiceCommand>();
+
+            var handler = new RegisterBillableOrderCommandHandler(
+                registerBillableOrderCommandMock.Object,
+                registerBillableOrderServiceCommandMock.Object
+            );
+
+            var request = new RegisterBillableOrderCommand
+            {
+                // Set up your request properties here
+                Billable_Order_Service = null // No services in the request
+            };
+
+            // Act and Assert
+            Assert.ThrowsException<ServiceException>(() => handler.Handle(request, CancellationToken.None).Result);
+        }
+    }
+}
